@@ -5,6 +5,35 @@ const falsey = require('falsey');
 const { commonSessionMiddleware } = require('@keystone-alpha/session');
 const createGraphQLMiddleware = require('./graphql');
 const initConfig = require('./initConfig');
+const createApolloServer = require('./apolloServer.js');
+
+const createPublicAPI = (
+  app,
+  keystone,
+  accessRestriction,
+  apollo,
+  { apiPath, graphiqlPath, port }
+) => {
+  const server = createApolloServer(keystone, apollo, 'public', accessRestriction);
+  app.use(createGraphQLMiddleware(server, { apiPath, graphiqlPath, port, public: true }));
+};
+
+const createAPI = (
+  app,
+  keystone,
+  accessRestriction,
+  apollo,
+  { name, apiPath, graphiqlPath, port, public, allowedAudiences }
+) => {
+  const server = createApolloServer(keystone, apollo, name, accessRestriction);
+  app.use(createGraphQLMiddleware, server, {
+    apiPath,
+    graphiqlPath,
+    port,
+    public,
+    allowedAudiences,
+  });
+};
 
 module.exports = class WebServer {
   constructor(keystone, config) {
@@ -31,19 +60,19 @@ module.exports = class WebServer {
       // Inject the Admin specific session routes.
       // ie; this includes the signin/signout UI
       this.app.use(adminUI.createSessionMiddleware());
+      // Created a session middleware which will set audiences: ['admin']
+      // We might want to add more different signin middlewares which let the user authenticate against different
+      // strategies/allow access to different schemas!
     }
 
-    const { apiPath, graphiqlPath, apollo, port } = this.config;
-
     // GraphQL API always exists independent of any adminUI or Session settings
-    this.app.use(
-      createGraphQLMiddleware(keystone, 'admin', {
-        apiPath,
-        graphiqlPath,
-        apolloConfig: apollo,
-        port,
-      })
-    );
+    const { apollo } = this.config;
+    const schemaName = 'admin';
+    const accessRestriction = null;
+    const server = createApolloServer(keystone, apollo, schemaName, accessRestriction);
+
+    const { apiPath, graphiqlPath, port } = this.config;
+    this.app.use(createGraphQLMiddleware(server, { apiPath, graphiqlPath, port, public: true }));
 
     if (adminUI) {
       // This must be last as it's the "catch all" which falls into Webpack to

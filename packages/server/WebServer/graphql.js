@@ -6,7 +6,6 @@ const falsey = require('falsey');
 const terminalLink = require('terminal-link');
 
 const { addDevQueryMiddlewares } = require('./devQuery');
-const { createApolloServer } = require('./apolloServer');
 
 const graphiqlMiddleware = endpoint => (req, res) => {
   const tab = { endpoint };
@@ -30,11 +29,12 @@ const ttyLink = (text, path, port, version) => {
   }
 };
 
-module.exports = function createGraphQLMiddleware(
-  keystone,
-  schemaName,
-  { apiPath, graphiqlPath, apolloConfig, port }
-) {
+module.exports = function createGraphQLMiddleware(server, { apiPath, graphiqlPath, port }) {
+  // What if I want to put multiple servers here? should specify here what they are, and I guess their schema name too?
+  const requiredAuthedSchema = (req, res, next) => {
+    next();
+  };
+  // Create an express middleware with the appropriate routes
   const app = express();
 
   if (graphiqlPath) {
@@ -44,18 +44,18 @@ module.exports = function createGraphQLMiddleware(
 
       if (falsey(process.env.DISABLE_LOGGING)) {
         // NOTE: Must come before we setup the API below
+        app.use(graphiqlPath, requiredAuthedSchema);
         addDevQueryMiddlewares(app, apiPath, graphiqlPath, devQueryPath);
       }
     }
     ttyLink('GraphQL Playground:', graphiqlPath, port, playgroundPkg.version);
-    app.use(graphiqlPath, graphiqlMiddleware(apiPath));
+    app.use(graphiqlPath, requiredAuthedSchema, graphiqlMiddleware(apiPath));
   }
-
-  const server = createApolloServer(keystone, apolloConfig, schemaName);
 
   ttyLink('GraphQL API:', apiPath, port);
   // { cors: false } - prevent ApolloServer from overriding Keystone's CORS configuration.
   // https://www.apollographql.com/docs/apollo-server/api/apollo-server.html#ApolloServer-applyMiddleware
+  app.use(apiPath, requiredAuthedSchema);
   server.applyMiddleware({ app, path: apiPath, cors: false });
 
   return app;

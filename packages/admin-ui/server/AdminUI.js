@@ -49,9 +49,11 @@ module.exports = class AdminUI {
 
   createSessionMiddleware() {
     const { signinPath, signoutPath, sessionPath } = this.config;
+    const audiences = ['admin'];
     return createSessionMiddleware(
       { signinPath, signoutPath, sessionPath, successPath: this.adminPath },
-      this.authStrategy
+      this.authStrategy,
+      audiences
     );
   }
 
